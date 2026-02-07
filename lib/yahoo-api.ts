@@ -1,4 +1,5 @@
 import YahooFantasy from "yahoo-fantasy";
+import { getAuthTokens, AuthError } from "@/lib/auth";
 
 let yahooClient: InstanceType<typeof YahooFantasy> | null = null;
 
@@ -10,7 +11,7 @@ function tokenCallback(error: unknown, token: unknown) {
   console.log("Token refreshed successfully", token);
 }
 
-export function initYahooClient() {
+function initYahooClient() {
   if (!yahooClient) {
     yahooClient = new YahooFantasy(
       process.env.YAHOO_CLIENT_ID!,
@@ -22,14 +23,20 @@ export function initYahooClient() {
   return yahooClient;
 }
 
+/**
+ * Returns an authenticated Yahoo Fantasy client.
+ * Reads tokens from cookies, auto-refreshes if expired.
+ * Throws AuthError if user is not authenticated.
+ */
 export async function getYahooClient() {
+  const tokens = await getAuthTokens();
+  if (!tokens) {
+    throw new AuthError();
+  }
+
   const client = initYahooClient();
-
-  const accessToken = process.env.YAHOO_ACCESS_TOKEN || "";
-  const refreshToken = process.env.YAHOO_REFRESH_TOKEN || "";
-
-  client.setUserToken(accessToken);
-  client.setRefreshToken(refreshToken);
+  client.setUserToken(tokens.accessToken);
+  client.setRefreshToken(tokens.refreshToken);
 
   return client;
 }

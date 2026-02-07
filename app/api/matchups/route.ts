@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getYahooClient, getLeagueKey } from "@/lib/yahoo-api";
 import { getCache, setCache } from "@/lib/cache";
+import { AuthError } from "@/lib/auth";
 
 export async function GET() {
   const cacheKey = "weekly-matchups";
@@ -21,6 +22,9 @@ export async function GET() {
 
     return NextResponse.json(matchups);
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
     console.error("Error fetching matchups:", error);
     return NextResponse.json(
       { error: "Failed to fetch matchups" },
