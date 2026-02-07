@@ -29,3 +29,6 @@ yarn-error.log*
 
 # Testing
 coverage/
+
+# SSL Certificates (local dev only)
+.cert/
