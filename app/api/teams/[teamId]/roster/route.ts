@@ -20,7 +20,14 @@ export async function GET(
     const leagueKey = getLeagueKey();
     const teamKey = `${leagueKey}.t.${teamId}`;
 
-    const roster = await client.team.roster(teamKey);
+    // Fetch roster with player stats via subresource
+    let roster;
+    try {
+      roster = await client.roster.players(teamKey, "stats");
+    } catch {
+      // Fallback to basic roster if stats subresource fails
+      roster = await client.team.roster(teamKey);
+    }
 
     // Cache for 6 hours
     setCache(cacheKey, roster, 6 * 60 * 60);

@@ -31,6 +31,13 @@ declare module "yahoo-fantasy" {
       meta(playerKey: string): Promise<unknown>;
       stats(playerKey: string): Promise<unknown>;
     };
+
+    roster: {
+      players(
+        teamKey: string,
+        ...args: unknown[]
+      ): Promise<unknown>;
+    };
   }
 
   export default YahooFantasy;

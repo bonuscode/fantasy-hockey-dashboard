@@ -20,7 +20,12 @@ export async function GET(
     const leagueKey = getLeagueKey();
     const teamKey = `${leagueKey}.t.${teamId}`;
 
-    const team = await client.team.meta(teamKey);
+    const [meta, stats] = await Promise.all([
+      client.team.meta(teamKey),
+      client.team.stats(teamKey).catch(() => null),
+    ]);
+
+    const team = { ...(meta as object), teamStats: stats };
 
     // Cache for 24 hours
     setCache(cacheKey, team, 24 * 60 * 60);
