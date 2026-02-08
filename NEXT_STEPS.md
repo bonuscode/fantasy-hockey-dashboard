@@ -1,34 +1,30 @@
 # Next Steps - Prioritized TODO
 
-## Priority 1: Fix Token Storage (Blocking Everything)
+## ~~Priority 1: Fix Token Storage~~ DONE
 
-### 1.1 Persist tokens from OAuth callback
-The callback route (`app/api/auth/callback/route.ts`) currently logs tokens to the console and redirects home. It needs to:
-- Store `access_token`, `refresh_token`, and `expires_in` in HTTP-only cookies or server-side session
-- Consider using `cookies()` from `next/headers` for simple cookie-based storage
-- Tokens expire in 1 hour — must store expiry timestamp alongside
+### ~~1.1 Persist tokens from OAuth callback~~ DONE
+- Callback stores `access_token`, `refresh_token`, `token_expiry` in HTTP-only secure cookies
+- Logout clears all token cookies
 
-### 1.2 Update yahoo-api.ts to read tokens from cookies
-`lib/yahoo-api.ts` currently reads tokens from `process.env`. Change `getYahooClient()` to:
-- Read access token and refresh token from cookies/session
-- Check if access token is expired
-- Auto-refresh if expired using `lib/auth.ts` `refreshAccessToken()`
-- Update stored tokens after refresh
+### ~~1.2 Update yahoo-api.ts to read tokens from cookies~~ DONE
+- `getAuthTokens()` reads cookies, checks expiry (5-min buffer), auto-refreshes and updates cookies
+- `getYahooClient()` uses `getAuthTokens()` instead of `process.env`; throws `AuthError` when unauthenticated
 
-### 1.3 Add auth middleware/guard
-- API routes should check for valid tokens before calling Yahoo API
-- Return 401 with redirect to `/api/auth/login` if no tokens present
-- Frontend should detect 401 and show login prompt
+### ~~1.3 Add auth middleware/guard~~ DONE
+- All API routes catch `AuthError` and return 401
+- New `/api/auth/status` endpoint for frontend auth checking
+- Home page shows live auth status with Connect/Disconnect button
 
-## Priority 2: Get First API Data Displaying
+## ~~Priority 2: Get First API Data Displaying~~ (IN PROGRESS)
 
-### 2.1 Wire up standings page
-- Add client-side data fetching with TanStack Query (`useQuery` calling `/api/league/standings`)
-- Build the standings table component per FRONTEND_GUIDELINES.md specs
-- Handle loading skeleton and error states
-- Test with real Yahoo data
+### ~~2.1 Wire up standings page~~ DONE
+- Client-side data fetching with TanStack Query (`useQuery` calling `/api/league/standings`)
+- Standings table with sortable columns, rank colors (gold/silver/bronze), playoff/bubble indicators
+- Adaptive: detects points vs category league, hides PF/PA/Streak when not available
+- Mobile card layout below 768px
+- Loading skeleton, error with retry, unauthenticated with login CTA, empty state
 
-### 2.2 Wire up team dashboard
+### 2.2 Wire up team dashboard (NEXT)
 - Fetch team details and roster from `/api/teams/[teamId]` and `/api/teams/[teamId]/roster`
 - Build roster table (Forwards, Defense, Goalies, Bench sections)
 - Player stat display (G, A, PTS for skaters; W, GAA, SV% for goalies)
