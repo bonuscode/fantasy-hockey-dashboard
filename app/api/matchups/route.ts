@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getYahooClient, getLeagueKey } from "@/lib/yahoo-api";
 import { getCache, setCache } from "@/lib/cache";
 import { AuthError } from "@/lib/auth";
 
-export async function GET() {
-  const cacheKey = "weekly-matchups";
+export async function GET(request: NextRequest) {
+  const weekParam = request.nextUrl.searchParams.get("week");
+  const week = weekParam ? parseInt(weekParam, 10) : undefined;
+  const cacheKey = `weekly-matchups-${week ?? "current"}`;
 
   const cached = getCache(cacheKey);
   if (cached) {
@@ -15,7 +17,7 @@ export async function GET() {
     const client = await getYahooClient();
     const leagueKey = getLeagueKey();
 
-    const matchups = await client.league.scoreboard(leagueKey);
+    const matchups = await client.league.scoreboard(leagueKey, week);
 
     // Cache for 6 hours
     setCache(cacheKey, matchups, 6 * 60 * 60);
