@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
+import { LineChart, Line, Tooltip, ResponsiveContainer } from "recharts";
 
 // --- Types ---
 
@@ -24,6 +25,16 @@ interface LeaderboardPlayer {
 }
 
 type PositionFilter = "All Skaters" | "C" | "LW" | "RW" | "D" | "G";
+
+interface TrendWeek {
+  statId: string;
+  value: string;
+}
+
+interface TrendsData {
+  currentWeek: number;
+  trends: Record<string, { week: number; stats: TrendWeek[] }[]>;
+}
 
 // --- Stat ID mapping (BrewZoo league-specific) ---
 
@@ -51,6 +62,8 @@ const GOALIE_STAT_LABELS = ["W", "GAA", "SV%", "SO", "GA", "SV", "SA"];
 const LOWER_IS_BETTER = new Set(["23", "22", "8"]);
 
 const POSITION_FILTERS: PositionFilter[] = ["All Skaters", "C", "LW", "RW", "D", "G"];
+
+const ALL_STAT_MAP: Record<string, string> = { ...SKATER_STAT_MAP, ...GOALIE_STAT_MAP };
 
 // --- Normalization ---
 
@@ -174,6 +187,68 @@ function getStatusBadge(status: string) {
   }
 }
 
+// --- Sparkline helpers ---
+
+function getSparklineData(
+  trends: TrendsData | undefined,
+  playerKey: string,
+  statId: string
+): { week: number; value: number }[] | null {
+  if (!trends?.trends?.[playerKey]) return null;
+
+  const weekData = trends.trends[playerKey];
+  const points = weekData
+    .map((wd) => {
+      const stat = wd.stats.find((s) => s.statId === statId);
+      if (!stat || stat.value === "" || stat.value === "-") return null;
+      const value = parseFloat(stat.value);
+      if (isNaN(value)) return null;
+      return { week: wd.week, value };
+    })
+    .filter((p): p is { week: number; value: number } => p !== null)
+    .sort((a, b) => a.week - b.week);
+
+  // Need at least 2 data points for a line
+  if (points.length < 2) return null;
+  return points;
+}
+
+// --- Sparkline component ---
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function SparklineTooltip({ active, payload }: any) {
+  if (!active || !payload?.[0]) return null;
+  const { week, value } = payload[0].payload;
+  return (
+    <div className="bg-surface-elevated border border-border rounded px-2 py-1 text-[10px] shadow-lg">
+      <span className="text-text-muted">Wk {week}: </span>
+      <span className="font-mono font-medium text-text-primary">{value}</span>
+    </div>
+  );
+}
+
+function Sparkline({ data }: { data: { week: number; value: number }[] }) {
+  return (
+    <div className="w-[72px] h-[28px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke="var(--color-accent-primary)"
+            strokeWidth={1.5}
+            dot={false}
+          />
+          <Tooltip
+            content={<SparklineTooltip />}
+            cursor={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // --- Skeleton ---
 
 function LeaderboardSkeleton() {
@@ -212,7 +287,17 @@ function LeaderboardSkeleton() {
 
 // --- Mobile Player Card ---
 
-function PlayerCard({ player, rank }: { player: LeaderboardPlayer; rank: number }) {
+function PlayerCard({
+  player,
+  rank,
+  sparklineData,
+  sortStatLabel,
+}: {
+  player: LeaderboardPlayer;
+  rank: number;
+  sparklineData: { week: number; value: number }[] | null;
+  sortStatLabel: string;
+}) {
   const isG = isGoalie(player);
   const statLabels = isG ? GOALIE_STAT_LABELS : SKATER_STAT_LABELS;
   const labelToId = isG ? GOALIE_LABEL_TO_ID : SKATER_LABEL_TO_ID;
@@ -255,6 +340,12 @@ function PlayerCard({ player, rank }: { player: LeaderboardPlayer; rank: number 
           </div>
         ))}
       </div>
+      {sparklineData && (
+        <div className="mt-2 pt-2 border-t border-border flex items-center gap-2">
+          <span className="text-[10px] text-text-muted">{sortStatLabel} trend</span>
+          <Sparkline data={sparklineData} />
+        </div>
+      )}
     </div>
   );
 }
@@ -281,6 +372,16 @@ export default function PlayersPage() {
       const raw = await res.json();
       return normalizeAllPlayers(raw);
     },
+  });
+
+  const { data: trendsData } = useQuery<TrendsData>({
+    queryKey: ["player-trends"],
+    queryFn: async () => {
+      const res = await fetch("/api/players/trends");
+      if (!res.ok) return { currentWeek: 0, trends: {} };
+      return res.json();
+    },
+    enabled: !!allPlayers,
   });
 
   const isGoalieView = posFilter === "G";
@@ -427,6 +528,9 @@ export default function PlayersPage() {
             <tr className="border-b border-border bg-surface">
               <th className="text-xs font-semibold text-text-muted p-3 text-center w-12">#</th>
               <th className="text-xs font-semibold text-text-muted p-3 text-left">Player</th>
+              <th className="text-xs font-semibold text-text-muted p-3 text-center w-[88px]">
+                Trend
+              </th>
               {statLabels.map((label) => {
                 const isActive = effectiveSortLabel === label;
                 return (
@@ -459,55 +563,69 @@ export default function PlayersPage() {
             </tr>
           </thead>
           <tbody>
-            {displayPlayers.map((player, i) => (
-              <tr
-                key={player.playerKey || `${player.playerId}-${player.fantasyTeam}`}
-                className="border-b border-border last:border-b-0 hover:bg-surface-elevated/50 transition-colors"
-              >
-                <td className="p-3 text-center">
-                  <span className="text-xs font-bold font-mono text-text-muted">{i + 1}</span>
-                </td>
-                <td className="p-3">
-                  <div className="flex items-center gap-2.5">
-                    {player.imageUrl ? (
-                      <img src={player.imageUrl} alt="" className="w-7 h-7 rounded-full bg-surface-elevated shrink-0" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-surface-elevated flex items-center justify-center shrink-0">
-                        <span className="text-[10px] font-medium text-text-muted">{player.name.charAt(0)}</span>
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-text-primary truncate">{player.name}</span>
-                        {player.status && (
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${getStatusBadge(player.status)}`}>
-                            {player.status}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-text-muted">
-                        {player.nhlTeam} · {player.position}
-                        <span className="text-text-muted/60"> · {player.fantasyTeam}</span>
+            {displayPlayers.map((player, i) => {
+              const sparkData = getSparklineData(trendsData, player.playerKey, effectiveSortId);
+              return (
+                <tr
+                  key={player.playerKey || `${player.playerId}-${player.fantasyTeam}`}
+                  className="border-b border-border last:border-b-0 hover:bg-surface-elevated/50 transition-colors"
+                >
+                  <td className="p-3 text-center">
+                    <span className="text-xs font-bold font-mono text-text-muted">{i + 1}</span>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2.5">
+                      {player.imageUrl ? (
+                        <img src={player.imageUrl} alt="" className="w-7 h-7 rounded-full bg-surface-elevated shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-surface-elevated flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-medium text-text-muted">{player.name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-text-primary truncate">{player.name}</span>
+                          {player.status && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${getStatusBadge(player.status)}`}>
+                              {player.status}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-text-muted">
+                          {player.nhlTeam} · {player.position}
+                          <span className="text-text-muted/60"> · {player.fantasyTeam}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
-                {statLabels.map((label) => {
-                  const statId = labelToId[label];
-                  const isActive = effectiveSortLabel === label;
-                  return (
-                    <td
-                      key={label}
-                      className={`p-3 text-right font-mono text-sm ${
-                        isActive ? "text-accent-primary font-semibold" : "text-text-primary"
-                      }`}
-                    >
-                      {getStatDisplay(player, statId)}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-center">
+                      {sparkData ? (
+                        <Sparkline data={sparkData} />
+                      ) : trendsData ? (
+                        <span className="text-text-muted text-xs">–</span>
+                      ) : (
+                        <div className="w-[72px] h-[28px] bg-surface-elevated/50 rounded animate-pulse" />
+                      )}
+                    </div>
+                  </td>
+                  {statLabels.map((label) => {
+                    const statId = labelToId[label];
+                    const isActive = effectiveSortLabel === label;
+                    return (
+                      <td
+                        key={label}
+                        className={`p-3 text-right font-mono text-sm ${
+                          isActive ? "text-accent-primary font-semibold" : "text-text-primary"
+                        }`}
+                      >
+                        {getStatDisplay(player, statId)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -519,6 +637,8 @@ export default function PlayersPage() {
             key={player.playerKey || `${player.playerId}-${player.fantasyTeam}`}
             player={player}
             rank={i + 1}
+            sparklineData={getSparklineData(trendsData, player.playerKey, effectiveSortId)}
+            sortStatLabel={ALL_STAT_MAP[effectiveSortId] || effectiveSortLabel}
           />
         ))}
       </div>

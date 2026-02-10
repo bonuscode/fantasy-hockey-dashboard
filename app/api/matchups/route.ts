@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
     const client = await getYahooClient();
     const leagueKey = getLeagueKey();
 
-    const matchups = await client.league.scoreboard(leagueKey, week);
+    const matchups = week != null
+      ? await client.league.scoreboard(leagueKey, week)
+      : await client.league.scoreboard(leagueKey);
 
     // Cache for 6 hours
     setCache(cacheKey, matchups, 6 * 60 * 60);
