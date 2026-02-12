@@ -68,7 +68,7 @@ const ALL_STAT_MAP: Record<string, string> = { ...SKATER_STAT_MAP, ...GOALIE_STA
 // --- Normalization ---
 
 function isGoalie(player: { position: string; eligiblePositions: string[] }): boolean {
-  return player.position === "G" || player.eligiblePositions.includes("G");
+  return player.position === "G" || player.eligiblePositions?.includes("G");
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

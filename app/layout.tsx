@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Fantasy Hockey Dashboard",
+  title: "Brew Zoo Dashboard",
   description:
     "Analytics dashboard for Yahoo Fantasy NHL league - standings, stats, and matchups",
 };

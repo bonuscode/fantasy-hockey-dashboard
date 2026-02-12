@@ -22,7 +22,7 @@ export default function Navigation() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <span className="text-xl font-semibold text-text-primary">
-              Fantasy Hockey
+              Brew Zoo Hockey
             </span>
           </Link>
 
