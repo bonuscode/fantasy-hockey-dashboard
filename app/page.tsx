@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 // ————— Types —————
 
@@ -37,12 +38,20 @@ interface MatchupTeam {
   logoUrl: string | null;
   managerName: string;
   teamKey: string;
+  stats: { statId: string; value: string }[];
+}
+
+interface StatWinnerInfo {
+  statId: string;
+  winnerTeamKey: string | null;
+  isTied: boolean;
 }
 
 interface MatchupPreview {
   team1: MatchupTeam;
   team2: MatchupTeam;
   score: { team1Wins: number; team2Wins: number; ties: number };
+  statWinners: StatWinnerInfo[];
   status: string;
 }
 
@@ -61,6 +70,13 @@ const GOALIE_STAT_MAP: Record<string, string> = {
   "25": "SV",
   "26": "SV%",
   "27": "SO",
+};
+
+const STAT_LABEL_MAP: Record<string, string> = {
+  "1": "G", "2": "A", "8": "PIM", "11": "SHG",
+  "14": "SOG", "31": "HIT", "32": "BLK",
+  "19": "W", "22": "GA", "23": "GAA",
+  "24": "SA", "25": "SV", "26": "SV%", "27": "SO",
 };
 
 // ————— Normalization —————
@@ -205,11 +221,18 @@ function normalizeMatchups(raw: any): MatchupsData | null {
     const firstLogo = Array.isArray(logos)
       ? logos[0]?.team_logo?.url || logos[0]?.url || null
       : null;
+    const rawStats = t?.team_stats?.stats || t?.stats || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stats = (Array.isArray(rawStats) ? rawStats : []).map((s: any) => ({
+      statId: String(s?.stat?.stat_id || s?.stat_id || s?.statId || ""),
+      value: String(s?.stat?.value ?? s?.value ?? ""),
+    }));
     return {
       name: t?.name || "Unknown Team",
       logoUrl: firstLogo,
       managerName: firstManager?.nickname || firstManager?.name || "",
       teamKey: t?.team_key || t?.teamKey || "",
+      stats,
     };
   };
 
@@ -229,6 +252,7 @@ function normalizeMatchups(raw: any): MatchupsData | null {
       team2Wins = 0,
       ties = 0;
 
+    const statWinners: StatWinnerInfo[] = [];
     for (const sw of Array.isArray(rawWinners) ? rawWinners : []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const winner = (sw as any)?.stat_winner || sw;
@@ -236,6 +260,8 @@ function normalizeMatchups(raw: any): MatchupsData | null {
         winner?.is_tied === "1" || winner?.is_tied === 1;
       const winnerKey =
         winner?.winner_team_key || winner?.winnerTeamKey || null;
+      const statId = String(winner?.stat_id || winner?.statId || "");
+      statWinners.push({ statId, winnerTeamKey: winnerKey, isTied });
       if (isTied) ties++;
       else if (winnerKey === teams[0]?.teamKey) team1Wins++;
       else if (winnerKey === teams[1]?.teamKey) team2Wins++;
@@ -245,6 +271,7 @@ function normalizeMatchups(raw: any): MatchupsData | null {
       team1: teams[0] || { name: "TBD", logoUrl: null, managerName: "", teamKey: "" },
       team2: teams[1] || { name: "TBD", logoUrl: null, managerName: "", teamKey: "" },
       score: { team1Wins, team2Wins, ties },
+      statWinners,
       status: matchup?.status || "preevent",
     };
   });
@@ -422,7 +449,7 @@ function StandingsCard({
       <CardShell className="md:col-span-2" delay={0}>
         <CardHeader title="Standings" href="/standings" />
         <div className="px-5 pb-5 space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3">
               <Shimmer className="w-5 h-5 rounded" />
               <Shimmer className="w-6 h-6 rounded-full" />
@@ -436,19 +463,17 @@ function StandingsCard({
     );
   }
 
-  const top = standings.slice(0, 5);
-  const maxPct = Math.max(
-    ...top.map((t) => parseFloat(t.percentage) || 0),
-    0.001
-  );
+  const top = standings.slice(0, 6);
 
   return (
     <CardShell className="md:col-span-2" delay={0}>
       <CardHeader title="Standings" href="/standings" />
       <div className="px-5 pb-5 space-y-1">
         {top.map((team) => {
-          const pct = parseFloat(team.percentage) || 0;
-          const barWidth = Math.max((pct / maxPct) * 100, 6);
+          const total = team.wins + team.losses + team.ties;
+          const wPct = total > 0 ? (team.wins / total) * 100 : 0;
+          const tPct = total > 0 ? (team.ties / total) * 100 : 0;
+          const lPct = total > 0 ? (team.losses / total) * 100 : 0;
           return (
             <Link
               key={team.teamKey || team.teamId}
@@ -480,18 +505,25 @@ function StandingsCard({
                 {team.wins}-{team.losses}-{team.ties}
               </span>
               <div className="w-24 shrink-0 hidden sm:block">
-                <div className="h-1.5 bg-surface-elevated rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700 ease-out"
-                    style={{
-                      width: `${barWidth}%`,
-                      background:
-                        team.rank <= 3
-                          ? "linear-gradient(90deg, var(--accent-primary), var(--accent-info))"
-                          : "var(--text-muted)",
-                      opacity: team.rank <= 3 ? 1 : 0.35,
-                    }}
-                  />
+                <div className="h-1.5 bg-surface-elevated rounded-full overflow-hidden flex">
+                  {wPct > 0 && (
+                    <div
+                      className="h-full bg-accent-success transition-all duration-700 ease-out"
+                      style={{ width: `${wPct}%` }}
+                    />
+                  )}
+                  {tPct > 0 && (
+                    <div
+                      className="h-full bg-accent-warning transition-all duration-700 ease-out"
+                      style={{ width: `${tPct}%` }}
+                    />
+                  )}
+                  {lPct > 0 && (
+                    <div
+                      className="h-full bg-accent-danger transition-all duration-700 ease-out"
+                      style={{ width: `${lPct}%` }}
+                    />
+                  )}
                 </div>
               </div>
             </Link>
@@ -679,66 +711,97 @@ function TeamLogo({ team }: { team: MatchupTeam }) {
 }
 
 function MatchupSlide({ matchup }: { matchup: MatchupPreview }) {
-  const { team1, team2, score } = matchup;
+  const { team1, team2, score, statWinners } = matchup;
+
   return (
-    <div className="flex items-center justify-between gap-2">
-      {/* Team 1 */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <TeamLogo team={team1} />
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-text-primary truncate">
-            {team1.name}
-          </div>
-          {team1.managerName && (
-            <div className="text-xs text-text-muted truncate">
-              {team1.managerName}
+    <div className="space-y-3">
+      {/* Teams + Score */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <TeamLogo team={team1} />
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-text-primary truncate">
+              {team1.name}
             </div>
-          )}
+            {team1.managerName && (
+              <div className="text-xs text-text-muted truncate">
+                {team1.managerName}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-3 shrink-0 text-center">
+          <div className="font-mono font-bold text-xl text-text-primary leading-none">
+            <span className={score.team1Wins > score.team2Wins ? "text-accent-success" : ""}>
+              {score.team1Wins}
+            </span>
+            <span className="text-text-muted mx-1.5 text-base">-</span>
+            <span className={score.team2Wins > score.team1Wins ? "text-accent-success" : ""}>
+              {score.team2Wins}
+            </span>
+            <span className="text-text-muted mx-1.5 text-base">-</span>
+            <span className="text-text-secondary">{score.ties}</span>
+          </div>
+          <div className="text-[10px] text-text-muted mt-1">W - L - T</div>
+        </div>
+
+        <div className="flex items-center gap-3 min-w-0 flex-1 justify-end">
+          <div className="min-w-0 text-right">
+            <div className="text-sm font-medium text-text-primary truncate">
+              {team2.name}
+            </div>
+            {team2.managerName && (
+              <div className="text-xs text-text-muted truncate">
+                {team2.managerName}
+              </div>
+            )}
+          </div>
+          <TeamLogo team={team2} />
         </div>
       </div>
 
-      {/* Score */}
-      <div className="px-3 shrink-0 text-center">
-        <div className="font-mono font-bold text-xl text-text-primary leading-none">
-          <span
-            className={
-              score.team1Wins > score.team2Wins
-                ? "text-accent-success"
-                : ""
-            }
-          >
-            {score.team1Wins}
-          </span>
-          <span className="text-text-muted mx-1.5 text-base">-</span>
-          <span
-            className={
-              score.team2Wins > score.team1Wins
-                ? "text-accent-success"
-                : ""
-            }
-          >
-            {score.team2Wins}
-          </span>
-          <span className="text-text-muted mx-1.5 text-base">-</span>
-          <span className="text-text-secondary">{score.ties}</span>
-        </div>
-        <div className="text-[10px] text-text-muted mt-1">W - L - T</div>
-      </div>
-
-      {/* Team 2 */}
-      <div className="flex items-center gap-3 min-w-0 flex-1 justify-end">
-        <div className="min-w-0 text-right">
-          <div className="text-sm font-medium text-text-primary truncate">
-            {team2.name}
+      {/* Category rows */}
+      {statWinners.length > 0 && (
+        <div className="border-t border-border pt-2">
+          <div className="border border-border rounded-md overflow-hidden divide-y divide-border">
+            {statWinners.map((sw) => {
+              const label = STAT_LABEL_MAP[sw.statId] || sw.statId;
+              const t1Won = !sw.isTied && sw.winnerTeamKey === team1.teamKey;
+              const t2Won = !sw.isTied && sw.winnerTeamKey === team2.teamKey;
+              return (
+                <div key={sw.statId} className="flex items-center">
+                  <div
+                    className={`flex-1 h-5 ${t1Won ? "bg-accent-success/10" : ""}`}
+                  >
+                    {t1Won && (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent-success" />
+                      </div>
+                    )}
+                  </div>
+                  <span
+                    className={`text-[10px] font-mono font-semibold w-10 text-center shrink-0 border-x border-border ${
+                      sw.isTied ? "text-text-muted" : "text-text-primary"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                  <div
+                    className={`flex-1 h-5 ${t2Won ? "bg-accent-success/10" : ""}`}
+                  >
+                    {t2Won && (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent-success" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {team2.managerName && (
-            <div className="text-xs text-text-muted truncate">
-              {team2.managerName}
-            </div>
-          )}
         </div>
-        <TeamLogo team={team2} />
-      </div>
+      )}
     </div>
   );
 }
@@ -895,131 +958,156 @@ function MatchupPreviewCard({
   );
 }
 
-// ————— Auth Status Card —————
+// ————— Weekly Stat Pie Chart Card —————
 
-function AuthCard({
-  isAuthenticated,
-  isLoading,
-}: {
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}) {
+const PIE_COLORS = [
+  "#0ea5e9", "#f59e0b", "#10b981", "#ef4444",
+  "#06b6d4", "#f97316", "#8b5cf6", "#ec4899",
+  "#14b8a6", "#eab308", "#3b82f6", "#e11d48",
+];
+
+function aggregateTeamStat(
+  matchups: MatchupPreview[],
+  statId: string
+): { name: string; value: number }[] {
+  const seen = new Set<string>();
+  const result: { name: string; value: number }[] = [];
+  for (const m of matchups) {
+    for (const team of [m.team1, m.team2]) {
+      if (seen.has(team.teamKey)) continue;
+      seen.add(team.teamKey);
+      const stat = team.stats.find((s) => s.statId === statId);
+      const val = stat ? parseFloat(stat.value) || 0 : 0;
+      result.push({ name: team.name, value: val });
+    }
+  }
+  return result.sort((a, b) => b.value - a.value);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function PieTooltipContent({ active, payload }: any) {
+  if (!active || !payload?.[0]) return null;
+  const { name, value } = payload[0].payload;
   return (
-    <CardShell delay={300}>
-      <CardHeader title="Connection" />
-      <div className="px-5 pb-5">
-        <div className="flex items-center gap-3 mb-3">
-          <div
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              isLoading
-                ? "bg-accent-warning animate-pulse"
-                : isAuthenticated
-                  ? "bg-accent-success"
-                  : "bg-accent-danger"
-            }`}
-          />
-          <span className="text-sm font-medium text-text-primary">
-            {isLoading
-              ? "Checking..."
-              : isAuthenticated
-                ? "Yahoo Connected"
-                : "Not Connected"}
-          </span>
-        </div>
-        <p className="text-xs text-text-muted mb-4 leading-relaxed">
-          {isAuthenticated
-            ? "Live league data is flowing. Your stats update automatically."
-            : "Link your Yahoo Fantasy account to unlock live standings, stats, and matchups."}
-        </p>
-        {!isLoading && (
-          <a
-            href={isAuthenticated ? "/api/auth/logout" : "/api/auth/login"}
-            className={`block text-center text-sm font-medium py-2 rounded-lg transition-all ${
-              isAuthenticated
-                ? "text-text-secondary hover:text-accent-danger hover:bg-accent-danger/10 border border-border"
-                : "bg-accent-primary text-white hover:bg-accent-primary/90 shadow-lg shadow-accent-primary/10"
-            }`}
-          >
-            {isAuthenticated ? "Disconnect" : "Connect Yahoo"}
-          </a>
-        )}
-      </div>
-    </CardShell>
+    <div className="bg-surface border border-border rounded-lg px-3 py-2 shadow-lg">
+      <p className="text-xs font-medium text-text-primary">{name}</p>
+      <p className="text-sm font-mono font-bold text-text-primary">{value}</p>
+    </div>
   );
 }
 
-// ————— Quick Nav Card —————
+function WeeklyStatPieCard({
+  title,
+  statId,
+  statLabel,
+  matchupsData,
+  isLoading,
+  isUnauth,
+  teamColorMap,
+  delay = 0,
+}: {
+  title: string;
+  statId: string;
+  statLabel: string;
+  matchupsData: MatchupsData | null | undefined;
+  isLoading: boolean;
+  isUnauth: boolean;
+  teamColorMap: Record<string, string>;
+  delay?: number;
+}) {
+  const data = useMemo(() => {
+    if (!matchupsData?.matchups) return [];
+    return aggregateTeamStat(matchupsData.matchups, statId);
+  }, [matchupsData, statId]);
 
-function NavCard() {
-  const links = [
-    {
-      href: "/standings",
-      label: "Standings",
-      desc: "Rankings & records",
-      icon: "M3 4h18M3 8h18M3 12h18M3 16h10",
-    },
-    {
-      href: "/players",
-      label: "Players",
-      desc: "Leaderboards & trends",
-      icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
-    },
-    {
-      href: "/matchups",
-      label: "Matchups",
-      desc: "H2H comparisons",
-      icon: "M13 10V3L4 14h7v7l9-11h-7z",
-    },
-  ];
+  const allZero = data.length === 0 || data.every((d) => d.value === 0);
+
+  if (isUnauth) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} href="/matchups" />
+        <div className="px-5 pb-5">
+          <PlaceholderState
+            icon="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
+            text={`Connect to view ${statLabel.toLowerCase()}`}
+          />
+        </div>
+      </CardShell>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} href="/matchups" />
+        <div className="px-5 pb-5 flex items-center justify-center py-6">
+          <Shimmer className="w-28 h-28 rounded-full" />
+        </div>
+      </CardShell>
+    );
+  }
+
+  if (allZero) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} href="/matchups" />
+        <div className="px-5 pb-5">
+          <PlaceholderState
+            icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            text={`No ${statLabel.toLowerCase()} yet this week`}
+          />
+        </div>
+      </CardShell>
+    );
+  }
 
   return (
-    <CardShell delay={350}>
-      <CardHeader title="Explore" />
-      <div className="px-5 pb-5 space-y-1">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="flex items-center gap-3 -mx-2 px-3 py-2.5 rounded-lg hover:bg-surface-elevated transition-colors group/link"
-          >
-            <div className="w-8 h-8 rounded-lg bg-surface-elevated flex items-center justify-center shrink-0 group-hover/link:bg-accent-primary/10 transition-colors">
-              <svg
-                className="w-4 h-4 text-text-muted group-hover/link:text-accent-primary transition-colors"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+    <CardShell delay={delay}>
+      <CardHeader title={title} href="/matchups" />
+      <div className="flex items-start px-3 pb-4">
+        {/* Pie chart — prominent left */}
+        <div className="shrink-0 w-[120px] h-[120px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={56}
+                innerRadius={22}
+                paddingAngle={2}
+                strokeWidth={0}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d={link.icon}
-                />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-text-primary group-hover/link:text-accent-primary transition-colors">
-                {link.label}
-              </div>
-              <div className="text-[11px] text-text-muted">
-                {link.desc}
-              </div>
-            </div>
-            <svg
-              className="w-3.5 h-3.5 text-transparent group-hover/link:text-text-muted transition-all group-hover/link:translate-x-0.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
+                {data.map((d) => (
+                  <Cell
+                    key={d.name}
+                    fill={teamColorMap[d.name] || PIE_COLORS[0]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<PieTooltipContent />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        {/* Team list — tight right column */}
+        <div className="flex-1 min-w-0 space-y-0.5 pt-1 pl-1">
+          {data.map((d) => (
+            <div key={d.name} className="flex items-center gap-1.5">
+              <div
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: teamColorMap[d.name] || PIE_COLORS[0] }}
               />
-            </svg>
-          </Link>
-        ))}
+              <span className="text-[10px] text-text-muted truncate min-w-0 flex-1 leading-tight">
+                {d.name}
+              </span>
+              <span className="text-[10px] font-mono font-semibold text-text-primary shrink-0 tabular-nums">
+                {d.value}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </CardShell>
   );
@@ -1075,6 +1163,22 @@ export default function Home() {
     enabled: isAuthenticated,
   });
 
+  // Stable team→color mapping so both pie charts use the same color per team
+  const teamColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (!matchupsData?.matchups) return map;
+    let idx = 0;
+    for (const m of matchupsData.matchups) {
+      for (const team of [m.team1, m.team2]) {
+        if (!map[team.name]) {
+          map[team.name] = PIE_COLORS[idx % PIE_COLORS.length];
+          idx++;
+        }
+      }
+    }
+    return map;
+  }, [matchupsData]);
+
   return (
     <>
       <style>{`
@@ -1095,7 +1199,7 @@ export default function Home() {
       {/* Hero */}
       <div className="mb-8 pt-2">
         <h1 className="text-3xl md:text-4xl font-bold text-text-primary tracking-tight mb-1">
-          Fantasy Hockey
+          League Dashboard
           <span className="text-accent-primary">.</span>
         </h1>
         <p className="text-text-secondary text-sm md:text-base">
@@ -1141,7 +1245,7 @@ export default function Home() {
           isUnauth={isUnauth}
         />
 
-        {/* Row 3: Top Goalie + Auth + Explore */}
+        {/* Row 3: Top Goalie + Goals Pie + Assists Pie */}
         <PlayerLeaderCard
           title="Top Goalie"
           statId="26"
@@ -1153,11 +1257,26 @@ export default function Home() {
           count={3}
           delay={250}
         />
-        <AuthCard
-          isAuthenticated={isAuthenticated}
-          isLoading={authLoading}
+        <WeeklyStatPieCard
+          title={matchupsData?.week ? `Week ${matchupsData.week} Goals` : "Goals by Team"}
+          statId="1"
+          statLabel="Goals"
+          matchupsData={matchupsData}
+          isLoading={isAuthenticated && matchupsLoading}
+          isUnauth={isUnauth}
+          teamColorMap={teamColorMap}
+          delay={300}
         />
-        <NavCard />
+        <WeeklyStatPieCard
+          title={matchupsData?.week ? `Week ${matchupsData.week} Assists` : "Assists by Team"}
+          statId="2"
+          statLabel="Assists"
+          matchupsData={matchupsData}
+          isLoading={isAuthenticated && matchupsLoading}
+          isUnauth={isUnauth}
+          teamColorMap={teamColorMap}
+          delay={350}
+        />
       </div>
     </>
   );

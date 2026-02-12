@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -15,6 +16,16 @@ export default function Navigation() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const { data: authStatus, isLoading: authLoading } = useQuery({
+    queryKey: ["auth-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/status");
+      return res.json() as Promise<{ authenticated: boolean }>;
+    },
+  });
+
+  const isAuthenticated = authStatus?.authenticated ?? false;
+
   return (
     <header className="sticky top-0 z-50 bg-surface border-b border-border">
       <nav className="max-w-[1280px] mx-auto px-4 md:px-6">
@@ -26,7 +37,7 @@ export default function Navigation() {
             </span>
           </Link>
 
-          {/* Desktop Nav */}
+          {/* Desktop Nav + Auth */}
           <div className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => {
               const isActive =
@@ -47,6 +58,33 @@ export default function Navigation() {
                 </Link>
               );
             })}
+
+            {/* Divider */}
+            <div className="w-px h-6 bg-border mx-3" />
+
+            {/* Auth Status */}
+            {authLoading ? (
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                <div className="w-2 h-2 rounded-full bg-accent-warning animate-pulse" />
+                <span className="text-xs text-text-muted">Checking...</span>
+              </div>
+            ) : (
+              <a
+                href={isAuthenticated ? "/api/auth/logout" : "/api/auth/login"}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  isAuthenticated
+                    ? "text-text-secondary hover:text-accent-danger hover:bg-accent-danger/10"
+                    : "bg-accent-primary text-white hover:bg-accent-primary/90"
+                }`}
+              >
+                <div
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    isAuthenticated ? "bg-accent-success" : "bg-accent-danger"
+                  }`}
+                />
+                {isAuthenticated ? "Yahoo Connected" : "Connect Yahoo"}
+              </a>
+            )}
           </div>
 
           {/* Mobile Hamburger */}
@@ -104,6 +142,32 @@ export default function Navigation() {
                   </Link>
                 );
               })}
+              {/* Mobile Auth */}
+              <div className="border-t border-border mt-2 pt-3">
+                {authLoading ? (
+                  <div className="flex items-center gap-2 px-4 py-2">
+                    <div className="w-2 h-2 rounded-full bg-accent-warning animate-pulse" />
+                    <span className="text-xs text-text-muted">Checking connection...</span>
+                  </div>
+                ) : (
+                  <a
+                    href={isAuthenticated ? "/api/auth/logout" : "/api/auth/login"}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-2 mx-2 px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                      isAuthenticated
+                        ? "text-text-secondary hover:text-accent-danger hover:bg-accent-danger/10"
+                        : "bg-accent-primary text-white hover:bg-accent-primary/90"
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        isAuthenticated ? "bg-accent-success" : "bg-accent-danger"
+                      }`}
+                    />
+                    {isAuthenticated ? "Yahoo Connected" : "Connect Yahoo"}
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -161,7 +161,7 @@ function filterPlayers(players: LeaderboardPlayer[], filter: PositionFilter): Le
     case "RW":
     case "D":
       return players.filter((p) =>
-        !isGoalie(p) && (p.position.includes(filter) || p.eligiblePositions.includes(filter))
+        !isGoalie(p) && (p.position.includes(filter) || p.eligiblePositions?.includes(filter))
       );
   }
 }
@@ -567,7 +567,7 @@ export default function PlayersPage() {
               const sparkData = getSparklineData(trendsData, player.playerKey, effectiveSortId);
               return (
                 <tr
-                  key={player.playerKey || `${player.playerId}-${player.fantasyTeam}`}
+                  key={player.playerKey || `${player.name}-${player.fantasyTeam}-${i}`}
                   className="border-b border-border last:border-b-0 hover:bg-surface-elevated/50 transition-colors"
                 >
                   <td className="p-3 text-center">
@@ -634,7 +634,7 @@ export default function PlayersPage() {
       <div className="md:hidden flex flex-col gap-2">
         {displayPlayers.map((player, i) => (
           <PlayerCard
-            key={player.playerKey || `${player.playerId}-${player.fantasyTeam}`}
+            key={player.playerKey || `${player.name}-${player.fantasyTeam}-${i}`}
             player={player}
             rank={i + 1}
             sparklineData={getSparklineData(trendsData, player.playerKey, effectiveSortId)}
