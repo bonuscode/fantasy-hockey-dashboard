@@ -390,6 +390,35 @@ function Shimmer({ className = "" }: { className?: string }) {
   );
 }
 
+function CardError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center py-6 text-center">
+      <div className="w-9 h-9 rounded-full bg-accent-danger/10 flex items-center justify-center mb-2">
+        <svg
+          className="w-4.5 h-4.5 text-accent-danger"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+          />
+        </svg>
+      </div>
+      <p className="text-xs text-text-secondary mb-2">Failed to load</p>
+      <button
+        onClick={onRetry}
+        className="text-xs font-medium text-accent-primary hover:text-accent-primary/80 transition-colors"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function PlaceholderState({
   icon,
   text,
@@ -425,11 +454,26 @@ function StandingsCard({
   standings,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
 }: {
   standings: TeamStanding[] | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
 }) {
+  if (isError) {
+    return (
+      <CardShell className="md:col-span-2" delay={0}>
+        <CardHeader title="Standings" href="/standings" />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
+  }
+
   if (isUnauth) {
     return (
       <CardShell className="md:col-span-2" delay={0}>
@@ -544,6 +588,8 @@ function PlayerLeaderCard({
   players,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
   count = 1,
   delay = 0,
 }: {
@@ -554,6 +600,8 @@ function PlayerLeaderCard({
   players: LeaderPlayer[] | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
   count?: number;
   delay?: number;
 }) {
@@ -574,6 +622,17 @@ function PlayerLeaderCard({
       })
       .slice(0, count);
   }, [players, statId, count]);
+
+  if (isError) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
+  }
 
   if (isUnauth) {
     return (
@@ -810,10 +869,14 @@ function MatchupPreviewCard({
   matchupsData,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
 }: {
   matchupsData: MatchupsData | null | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState<"left" | "right">("right");
@@ -836,6 +899,17 @@ function MatchupPreviewCard({
     setDirection("right");
     setAnimKey((k) => k + 1);
     setIndex((i) => i + 1);
+  }
+
+  if (isError) {
+    return (
+      <CardShell className="md:col-span-2" delay={200}>
+        <CardHeader title="This Week" href="/matchups" />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
   }
 
   if (isUnauth) {
@@ -1003,6 +1077,8 @@ function WeeklyStatPieCard({
   matchupsData,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
   teamColorMap,
   delay = 0,
 }: {
@@ -1012,6 +1088,8 @@ function WeeklyStatPieCard({
   matchupsData: MatchupsData | null | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
   teamColorMap: Record<string, string>;
   delay?: number;
 }) {
@@ -1021,6 +1099,17 @@ function WeeklyStatPieCard({
   }, [matchupsData, statId]);
 
   const allZero = data.length === 0 || data.every((d) => d.value === 0);
+
+  if (isError) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} href="/matchups" />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
+  }
 
   if (isUnauth) {
     return (
@@ -1127,36 +1216,51 @@ export default function Home() {
   const isAuthenticated = authStatus?.authenticated ?? false;
   const isUnauth = !authLoading && !isAuthenticated;
 
-  const { data: standings, isLoading: standingsLoading } = useQuery({
+  const {
+    data: standings,
+    isLoading: standingsLoading,
+    isError: standingsError,
+    refetch: refetchStandings,
+  } = useQuery({
     queryKey: ["standings"],
     queryFn: async () => {
       const res = await fetch("/api/league/standings");
       if (res.status === 401) return null;
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error("Failed to fetch standings");
       const raw = await res.json();
       return normalizeStandings(raw);
     },
     enabled: isAuthenticated,
   });
 
-  const { data: allPlayers, isLoading: playersLoading } = useQuery({
+  const {
+    data: allPlayers,
+    isLoading: playersLoading,
+    isError: playersError,
+    refetch: refetchPlayers,
+  } = useQuery({
     queryKey: ["all-players"],
     queryFn: async () => {
       const res = await fetch("/api/players/stats");
       if (res.status === 401) return null;
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error("Failed to fetch players");
       const raw = await res.json();
       return normalizeAllPlayers(raw);
     },
     enabled: isAuthenticated,
   });
 
-  const { data: matchupsData, isLoading: matchupsLoading } = useQuery({
+  const {
+    data: matchupsData,
+    isLoading: matchupsLoading,
+    isError: matchupsError,
+    refetch: refetchMatchups,
+  } = useQuery({
     queryKey: ["matchup-preview"],
     queryFn: async () => {
       const res = await fetch("/api/matchups");
       if (res.status === 401) return null;
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error("Failed to fetch matchups");
       const raw = await res.json();
       return normalizeMatchups(raw);
     },
@@ -1214,6 +1318,8 @@ export default function Home() {
           standings={standings ?? undefined}
           isLoading={isAuthenticated && standingsLoading}
           isUnauth={isUnauth}
+          isError={standingsError}
+          onRetry={() => refetchStandings()}
         />
         <PlayerLeaderCard
           title="Goal Leader"
@@ -1223,6 +1329,8 @@ export default function Home() {
           players={allPlayers ?? undefined}
           isLoading={isAuthenticated && playersLoading}
           isUnauth={isUnauth}
+          isError={playersError}
+          onRetry={() => refetchPlayers()}
           count={3}
           delay={100}
         />
@@ -1236,6 +1344,8 @@ export default function Home() {
           players={allPlayers ?? undefined}
           isLoading={isAuthenticated && playersLoading}
           isUnauth={isUnauth}
+          isError={playersError}
+          onRetry={() => refetchPlayers()}
           count={3}
           delay={150}
         />
@@ -1243,6 +1353,8 @@ export default function Home() {
           matchupsData={matchupsData}
           isLoading={isAuthenticated && matchupsLoading}
           isUnauth={isUnauth}
+          isError={matchupsError}
+          onRetry={() => refetchMatchups()}
         />
 
         {/* Row 3: Top Goalie + Goals Pie + Assists Pie */}
@@ -1254,6 +1366,8 @@ export default function Home() {
           players={allPlayers ?? undefined}
           isLoading={isAuthenticated && playersLoading}
           isUnauth={isUnauth}
+          isError={playersError}
+          onRetry={() => refetchPlayers()}
           count={3}
           delay={250}
         />
@@ -1264,6 +1378,8 @@ export default function Home() {
           matchupsData={matchupsData}
           isLoading={isAuthenticated && matchupsLoading}
           isUnauth={isUnauth}
+          isError={matchupsError}
+          onRetry={() => refetchMatchups()}
           teamColorMap={teamColorMap}
           delay={300}
         />
@@ -1274,6 +1390,8 @@ export default function Home() {
           matchupsData={matchupsData}
           isLoading={isAuthenticated && matchupsLoading}
           isUnauth={isUnauth}
+          isError={matchupsError}
+          onRetry={() => refetchMatchups()}
           teamColorMap={teamColorMap}
           delay={350}
         />
