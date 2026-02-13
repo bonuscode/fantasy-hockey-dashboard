@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 
 // ————— Types —————
 
@@ -58,6 +61,28 @@ interface MatchupPreview {
 interface MatchupsData {
   week: number;
   matchups: MatchupPreview[];
+}
+
+interface StandingsHistoryTeam {
+  teamKey: string;
+  name: string;
+}
+
+interface WeekRecord {
+  wins: number;
+  losses: number;
+  ties: number;
+}
+
+interface WeekStandings {
+  week: number;
+  records: Record<string, WeekRecord>;
+}
+
+interface StandingsHistoryData {
+  currentWeek: number;
+  teams: StandingsHistoryTeam[];
+  weeklyStandings: WeekStandings[];
 }
 
 // ————— Stat maps (BrewZoo league-specific) —————
@@ -1113,6 +1138,163 @@ function WeeklyStatPieCard({
   );
 }
 
+// ————— Standings Over Time Card —————
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function LineTooltipContent({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  // Sort by wins descending in tooltip
+  const sorted = [...payload].sort(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (a: any, b: any) => (b.value as number) - (a.value as number)
+  );
+  return (
+    <div className="bg-surface border border-border rounded-lg px-3 py-2.5 shadow-lg max-h-64 overflow-y-auto">
+      <p className="text-[11px] font-semibold text-text-muted mb-1.5">
+        Week {label}
+      </p>
+      <div className="space-y-1">
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {sorted.map((entry: any) => {
+          const record = entry.payload?.[`_record_${entry.dataKey?.replace("_wins", "")}`];
+          return (
+            <div key={entry.dataKey} className="flex items-center gap-2">
+              <div
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-[11px] text-text-primary truncate min-w-0 flex-1">
+                {entry.name}
+              </span>
+              <span className="text-[11px] font-mono font-semibold text-text-primary shrink-0">
+                {record
+                  ? `${record.wins}-${record.losses}-${record.ties}`
+                  : entry.value}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StandingsOverTimeCard({
+  historyData,
+  isLoading,
+  isUnauth,
+  teamColorMap,
+}: {
+  historyData: StandingsHistoryData | null | undefined;
+  isLoading: boolean;
+  isUnauth: boolean;
+  teamColorMap: Record<string, string>;
+}) {
+  const chartData = useMemo(() => {
+    if (!historyData?.weeklyStandings?.length || !historyData?.teams?.length) return [];
+
+    return historyData.weeklyStandings.map((ws) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const point: Record<string, any> = { week: ws.week };
+      for (const team of historyData.teams) {
+        const record = ws.records[team.teamKey];
+        if (record) {
+          // Use teamKey as data key (sanitized) and store wins
+          const key = team.teamKey.replace(/\./g, "_");
+          point[`${key}_wins`] = record.wins;
+          // Stash full record for tooltip
+          point[`_record_${key}`] = record;
+        }
+      }
+      return point;
+    });
+  }, [historyData]);
+
+  const teamLines = useMemo(() => {
+    if (!historyData?.teams) return [];
+    return historyData.teams.map((team) => ({
+      teamKey: team.teamKey,
+      dataKey: `${team.teamKey.replace(/\./g, "_")}_wins`,
+      name: team.name,
+      color: teamColorMap[team.name] || PIE_COLORS[0],
+    }));
+  }, [historyData, teamColorMap]);
+
+  if (isUnauth) {
+    return (
+      <CardShell className="md:col-span-3" delay={400}>
+        <CardHeader title="Season Trend" href="/standings" />
+        <div className="px-5 pb-5">
+          <PlaceholderState
+            icon="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+            text="Connect Yahoo to see season trends"
+          />
+        </div>
+      </CardShell>
+    );
+  }
+
+  if (isLoading || !chartData.length) {
+    return (
+      <CardShell className="md:col-span-3" delay={400}>
+        <CardHeader title="Season Trend" href="/standings" />
+        <div className="px-5 pb-5 flex items-center justify-center py-8">
+          <Shimmer className="w-full h-48 rounded-lg" />
+        </div>
+      </CardShell>
+    );
+  }
+
+  return (
+    <CardShell className="md:col-span-3" delay={400}>
+      <CardHeader title="Season Trend" href="/standings" />
+      <div className="px-2 pb-4 pr-5">
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: -12 }}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="var(--color-border)"
+              opacity={0.5}
+            />
+            <XAxis
+              dataKey="week"
+              tick={{ fontSize: 11, fill: "var(--color-text-muted)" }}
+              tickLine={false}
+              axisLine={{ stroke: "var(--color-border)" }}
+              label={{ value: "Week", position: "insideBottomRight", offset: -4, fontSize: 10, fill: "var(--color-text-muted)" }}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "var(--color-text-muted)" }}
+              tickLine={false}
+              axisLine={{ stroke: "var(--color-border)" }}
+              allowDecimals={false}
+              label={{ value: "Wins", angle: -90, position: "insideLeft", offset: 20, fontSize: 10, fill: "var(--color-text-muted)" }}
+            />
+            <Tooltip content={<LineTooltipContent />} />
+            <Legend
+              wrapperStyle={{ fontSize: "10px", paddingTop: "8px" }}
+              iconType="circle"
+              iconSize={6}
+            />
+            {teamLines.map((tl) => (
+              <Line
+                key={tl.dataKey}
+                type="monotone"
+                dataKey={tl.dataKey}
+                name={tl.name}
+                stroke={tl.color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </CardShell>
+  );
+}
+
 // ————— Main Page —————
 
 export default function Home() {
@@ -1163,13 +1345,35 @@ export default function Home() {
     enabled: isAuthenticated,
   });
 
-  // Stable team→color mapping so both pie charts use the same color per team
+  const { data: standingsHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ["standings-history"],
+    queryFn: async () => {
+      const res = await fetch("/api/league/standings-history");
+      if (res.status === 401) return null;
+      if (!res.ok) return null;
+      return (await res.json()) as StandingsHistoryData;
+    },
+    enabled: isAuthenticated,
+  });
+
+  // Stable team→color mapping so pie charts and line chart use the same color per team
   const teamColorMap = useMemo(() => {
     const map: Record<string, string> = {};
-    if (!matchupsData?.matchups) return map;
     let idx = 0;
-    for (const m of matchupsData.matchups) {
-      for (const team of [m.team1, m.team2]) {
+    // Seed from matchups data first (original source)
+    if (matchupsData?.matchups) {
+      for (const m of matchupsData.matchups) {
+        for (const team of [m.team1, m.team2]) {
+          if (!map[team.name]) {
+            map[team.name] = PIE_COLORS[idx % PIE_COLORS.length];
+            idx++;
+          }
+        }
+      }
+    }
+    // Also seed from standings history (in case matchups hasn't loaded yet)
+    if (standingsHistory?.teams) {
+      for (const team of standingsHistory.teams) {
         if (!map[team.name]) {
           map[team.name] = PIE_COLORS[idx % PIE_COLORS.length];
           idx++;
@@ -1177,7 +1381,7 @@ export default function Home() {
       }
     }
     return map;
-  }, [matchupsData]);
+  }, [matchupsData, standingsHistory]);
 
   return (
     <>
@@ -1276,6 +1480,14 @@ export default function Home() {
           isUnauth={isUnauth}
           teamColorMap={teamColorMap}
           delay={350}
+        />
+
+        {/* Row 4: Standings Over Time (full width) */}
+        <StandingsOverTimeCard
+          historyData={standingsHistory}
+          isLoading={isAuthenticated && historyLoading}
+          isUnauth={isUnauth}
+          teamColorMap={teamColorMap}
         />
       </div>
     </>
