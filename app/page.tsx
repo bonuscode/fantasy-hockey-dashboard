@@ -1511,7 +1511,7 @@ export default function Home() {
           <span className="text-accent-primary">.</span>
         </h1>
         <p className="text-text-secondary text-sm md:text-base">
-          Live stats, standings, and matchups for your league.
+          Live stats, standings, matchups, and league insights at a glace.
         </p>
       </div>
 
