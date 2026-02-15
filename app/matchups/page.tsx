@@ -263,6 +263,7 @@ function TeamAvatar({ team, size = "md" }: { team: MatchupTeam; size?: "md" | "s
 function MatchupCard({ matchup }: { matchup: NormalizedMatchup }) {
   const { teams, statWinners, score, status } = matchup;
   const [team1, team2] = teams;
+  const [expanded, setExpanded] = useState(false);
 
   // Build ordered stat IDs from statWinners so we display exactly the league's scoring categories
   const statIds = statWinners.map((sw) => sw.statId);
@@ -271,15 +272,23 @@ function MatchupCard({ matchup }: { matchup: NormalizedMatchup }) {
   const firstGoalieIdx = statIds.findIndex((id) => GOALIE_STAT_IDS.includes(id));
   const hasDivider = firstGoalieIdx > 0;
 
+  // Determine leading team color for mobile collapsed view
+  const t1Leading = score.team1Wins > score.team2Wins;
+  const t2Leading = score.team2Wins > score.team1Wins;
+
   return (
     <div className="bg-surface border border-border rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b border-border">
+      {/* Header — tappable on mobile to expand/collapse */}
+      <button
+        className="w-full text-left p-4 md:cursor-default"
+        onClick={() => setExpanded((e) => !e)}
+        type="button"
+      >
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusColor(status)}`}>
             {getStatusLabel(status)}
           </span>
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5">
             {matchup.isPlayoffs && (
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary">
                 Playoffs
@@ -290,6 +299,15 @@ function MatchupCard({ matchup }: { matchup: NormalizedMatchup }) {
                 Consolation
               </span>
             )}
+            {/* Mobile expand chevron */}
+            <svg
+              className={`w-4 h-4 text-text-muted transition-transform duration-200 md:hidden ${expanded ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
         </div>
         <div className="flex items-center justify-between">
@@ -297,12 +315,10 @@ function MatchupCard({ matchup }: { matchup: NormalizedMatchup }) {
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <TeamAvatar team={team1} />
             <div className="min-w-0">
-              <div className="font-medium text-sm text-text-primary truncate">
+              <div className={`font-medium text-sm truncate ${t1Leading ? "text-accent-success" : "text-text-primary"}`}>
                 {team1.name}
               </div>
-              {team1.managerName && (
-                <div className="text-xs text-text-muted truncate">{team1.managerName}</div>
-              )}
+              <div className="text-xs text-text-muted truncate hidden md:block">{team1.managerName}</div>
             </div>
           </div>
           {/* Score */}
@@ -318,20 +334,18 @@ function MatchupCard({ matchup }: { matchup: NormalizedMatchup }) {
           {/* Team 2 */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1 justify-end">
             <div className="min-w-0 text-right">
-              <div className="font-medium text-sm text-text-primary truncate">
+              <div className={`font-medium text-sm truncate ${t2Leading ? "text-accent-success" : "text-text-primary"}`}>
                 {team2.name}
               </div>
-              {team2.managerName && (
-                <div className="text-xs text-text-muted truncate">{team2.managerName}</div>
-              )}
+              <div className="text-xs text-text-muted truncate hidden md:block">{team2.managerName}</div>
             </div>
             <TeamAvatar team={team2} />
           </div>
         </div>
-      </div>
+      </button>
 
-      {/* Stat comparison rows */}
-      <div className="divide-y divide-border">
+      {/* Stat comparison rows — always visible on desktop, collapsible on mobile */}
+      <div className={`divide-y divide-border border-t border-border ${expanded ? "" : "hidden md:block"}`}>
         {statIds.map((statId, idx) => {
           const winner = statWinners.find((sw) => sw.statId === statId);
           const label = STAT_LABEL_MAP[statId] || `Stat ${statId}`;

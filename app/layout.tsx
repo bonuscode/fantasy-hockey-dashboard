@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navigation from "./components/Navigation";
+import BottomNav from "./components/BottomNav";
 import QueryProvider from "./components/QueryProvider";
 
 const inter = Inter({
@@ -15,6 +16,10 @@ export const metadata: Metadata = {
     "Analytics dashboard for Yahoo Fantasy NHL league - standings, stats, and matchups",
 };
 
+export const viewport = {
+  viewportFit: "cover" as const,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -25,9 +30,10 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <QueryProvider>
           <Navigation />
-          <main className="max-w-[1280px] mx-auto px-4 md:px-6 py-6">
+          <main className="max-w-[1280px] mx-auto px-4 md:px-6 py-6 pb-20 md:pb-6">
             {children}
           </main>
+          <BottomNav />
         </QueryProvider>
       </body>
     </html>
