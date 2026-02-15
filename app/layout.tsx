@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navigation from "./components/Navigation";
 import BottomNav from "./components/BottomNav";
+import NetworkStatus from "./components/NetworkStatus";
 import QueryProvider from "./components/QueryProvider";
 
 const inter = Inter({
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.variable} font-sans antialiased`}>
         <QueryProvider>
+          <NetworkStatus />
           <Navigation />
           <main className="max-w-[1280px] mx-auto px-4 md:px-6 py-6 pb-20 md:pb-6">
             {children}

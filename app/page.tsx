@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 
 // ————— Types —————
 
@@ -58,6 +61,28 @@ interface MatchupPreview {
 interface MatchupsData {
   week: number;
   matchups: MatchupPreview[];
+}
+
+interface StandingsHistoryTeam {
+  teamKey: string;
+  name: string;
+}
+
+interface WeekRecord {
+  wins: number;
+  losses: number;
+  ties: number;
+}
+
+interface WeekStandings {
+  week: number;
+  records: Record<string, WeekRecord>;
+}
+
+interface StandingsHistoryData {
+  currentWeek: number;
+  teams: StandingsHistoryTeam[];
+  weeklyStandings: WeekStandings[];
 }
 
 // ————— Stat maps (BrewZoo league-specific) —————
@@ -390,6 +415,35 @@ function Shimmer({ className = "" }: { className?: string }) {
   );
 }
 
+function CardError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center py-6 text-center">
+      <div className="w-9 h-9 rounded-full bg-accent-danger/10 flex items-center justify-center mb-2">
+        <svg
+          className="w-4.5 h-4.5 text-accent-danger"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+          />
+        </svg>
+      </div>
+      <p className="text-xs text-text-secondary mb-2">Failed to load</p>
+      <button
+        onClick={onRetry}
+        className="text-xs font-medium text-accent-primary hover:text-accent-primary/80 transition-colors"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function PlaceholderState({
   icon,
   text,
@@ -425,11 +479,26 @@ function StandingsCard({
   standings,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
 }: {
   standings: TeamStanding[] | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
 }) {
+  if (isError) {
+    return (
+      <CardShell className="md:col-span-2" delay={0}>
+        <CardHeader title="Standings" href="/standings" />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
+  }
+
   if (isUnauth) {
     return (
       <CardShell className="md:col-span-2" delay={0}>
@@ -544,6 +613,8 @@ function PlayerLeaderCard({
   players,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
   count = 1,
   delay = 0,
 }: {
@@ -554,6 +625,8 @@ function PlayerLeaderCard({
   players: LeaderPlayer[] | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
   count?: number;
   delay?: number;
 }) {
@@ -574,6 +647,17 @@ function PlayerLeaderCard({
       })
       .slice(0, count);
   }, [players, statId, count]);
+
+  if (isError) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
+  }
 
   if (isUnauth) {
     return (
@@ -810,10 +894,14 @@ function MatchupPreviewCard({
   matchupsData,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
 }: {
   matchupsData: MatchupsData | null | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState<"left" | "right">("right");
@@ -836,6 +924,17 @@ function MatchupPreviewCard({
     setDirection("right");
     setAnimKey((k) => k + 1);
     setIndex((i) => i + 1);
+  }
+
+  if (isError) {
+    return (
+      <CardShell className="md:col-span-2" delay={200}>
+        <CardHeader title="This Week" href="/matchups" />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
   }
 
   if (isUnauth) {
@@ -1003,6 +1102,8 @@ function WeeklyStatPieCard({
   matchupsData,
   isLoading,
   isUnauth,
+  isError,
+  onRetry,
   teamColorMap,
   delay = 0,
 }: {
@@ -1012,6 +1113,8 @@ function WeeklyStatPieCard({
   matchupsData: MatchupsData | null | undefined;
   isLoading: boolean;
   isUnauth: boolean;
+  isError: boolean;
+  onRetry: () => void;
   teamColorMap: Record<string, string>;
   delay?: number;
 }) {
@@ -1021,6 +1124,17 @@ function WeeklyStatPieCard({
   }, [matchupsData, statId]);
 
   const allZero = data.length === 0 || data.every((d) => d.value === 0);
+
+  if (isError) {
+    return (
+      <CardShell delay={delay}>
+        <CardHeader title={title} href="/matchups" />
+        <div className="px-5 pb-5">
+          <CardError onRetry={onRetry} />
+        </div>
+      </CardShell>
+    );
+  }
 
   if (isUnauth) {
     return (
@@ -1113,6 +1227,163 @@ function WeeklyStatPieCard({
   );
 }
 
+// ————— Standings Over Time Card —————
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function LineTooltipContent({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  // Sort by wins descending in tooltip
+  const sorted = [...payload].sort(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (a: any, b: any) => (b.value as number) - (a.value as number)
+  );
+  return (
+    <div className="bg-surface border border-border rounded-lg px-3 py-2.5 shadow-lg max-h-64 overflow-y-auto">
+      <p className="text-[11px] font-semibold text-text-muted mb-1.5">
+        Week {label}
+      </p>
+      <div className="space-y-1">
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {sorted.map((entry: any) => {
+          const record = entry.payload?.[`_record_${entry.dataKey?.replace("_wins", "")}`];
+          return (
+            <div key={entry.dataKey} className="flex items-center gap-2">
+              <div
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-[11px] text-text-primary truncate min-w-0 flex-1">
+                {entry.name}
+              </span>
+              <span className="text-[11px] font-mono font-semibold text-text-primary shrink-0">
+                {record
+                  ? `${record.wins}-${record.losses}-${record.ties}`
+                  : entry.value}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StandingsOverTimeCard({
+  historyData,
+  isLoading,
+  isUnauth,
+  teamColorMap,
+}: {
+  historyData: StandingsHistoryData | null | undefined;
+  isLoading: boolean;
+  isUnauth: boolean;
+  teamColorMap: Record<string, string>;
+}) {
+  const chartData = useMemo(() => {
+    if (!historyData?.weeklyStandings?.length || !historyData?.teams?.length) return [];
+
+    return historyData.weeklyStandings.map((ws) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const point: Record<string, any> = { week: ws.week };
+      for (const team of historyData.teams) {
+        const record = ws.records[team.teamKey];
+        if (record) {
+          // Use teamKey as data key (sanitized) and store wins
+          const key = team.teamKey.replace(/\./g, "_");
+          point[`${key}_wins`] = record.wins;
+          // Stash full record for tooltip
+          point[`_record_${key}`] = record;
+        }
+      }
+      return point;
+    });
+  }, [historyData]);
+
+  const teamLines = useMemo(() => {
+    if (!historyData?.teams) return [];
+    return historyData.teams.map((team) => ({
+      teamKey: team.teamKey,
+      dataKey: `${team.teamKey.replace(/\./g, "_")}_wins`,
+      name: team.name,
+      color: teamColorMap[team.name] || PIE_COLORS[0],
+    }));
+  }, [historyData, teamColorMap]);
+
+  if (isUnauth) {
+    return (
+      <CardShell className="md:col-span-3" delay={400}>
+        <CardHeader title="Season Trend" href="/standings" />
+        <div className="px-5 pb-5">
+          <PlaceholderState
+            icon="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+            text="Connect Yahoo to see season trends"
+          />
+        </div>
+      </CardShell>
+    );
+  }
+
+  if (isLoading || !chartData.length) {
+    return (
+      <CardShell className="md:col-span-3" delay={400}>
+        <CardHeader title="Season Trend" href="/standings" />
+        <div className="px-5 pb-5 flex items-center justify-center py-8">
+          <Shimmer className="w-full h-48 rounded-lg" />
+        </div>
+      </CardShell>
+    );
+  }
+
+  return (
+    <CardShell className="md:col-span-3" delay={400}>
+      <CardHeader title="Season Trend" href="/standings" />
+      <div className="px-2 pb-4 pr-5">
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: -12 }}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="var(--color-border)"
+              opacity={0.5}
+            />
+            <XAxis
+              dataKey="week"
+              tick={{ fontSize: 11, fill: "var(--color-text-muted)" }}
+              tickLine={false}
+              axisLine={{ stroke: "var(--color-border)" }}
+              label={{ value: "Week", position: "insideBottomRight", offset: -4, fontSize: 10, fill: "var(--color-text-muted)" }}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "var(--color-text-muted)" }}
+              tickLine={false}
+              axisLine={{ stroke: "var(--color-border)" }}
+              allowDecimals={false}
+              label={{ value: "Wins", angle: -90, position: "insideLeft", offset: 20, fontSize: 10, fill: "var(--color-text-muted)" }}
+            />
+            <Tooltip content={<LineTooltipContent />} />
+            <Legend
+              wrapperStyle={{ fontSize: "10px", paddingTop: "8px" }}
+              iconType="circle"
+              iconSize={6}
+            />
+            {teamLines.map((tl) => (
+              <Line
+                key={tl.dataKey}
+                type="monotone"
+                dataKey={tl.dataKey}
+                name={tl.name}
+                stroke={tl.color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </CardShell>
+  );
+}
+
 // ————— Main Page —————
 
 export default function Home() {
@@ -1127,49 +1398,86 @@ export default function Home() {
   const isAuthenticated = authStatus?.authenticated ?? false;
   const isUnauth = !authLoading && !isAuthenticated;
 
-  const { data: standings, isLoading: standingsLoading } = useQuery({
+  const {
+    data: standings,
+    isLoading: standingsLoading,
+    isError: standingsError,
+    refetch: refetchStandings,
+  } = useQuery({
     queryKey: ["standings"],
     queryFn: async () => {
       const res = await fetch("/api/league/standings");
       if (res.status === 401) return null;
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error("Failed to fetch standings");
       const raw = await res.json();
       return normalizeStandings(raw);
     },
     enabled: isAuthenticated,
   });
 
-  const { data: allPlayers, isLoading: playersLoading } = useQuery({
+  const {
+    data: allPlayers,
+    isLoading: playersLoading,
+    isError: playersError,
+    refetch: refetchPlayers,
+  } = useQuery({
     queryKey: ["all-players"],
     queryFn: async () => {
       const res = await fetch("/api/players/stats");
       if (res.status === 401) return null;
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error("Failed to fetch players");
       const raw = await res.json();
       return normalizeAllPlayers(raw);
     },
     enabled: isAuthenticated,
   });
 
-  const { data: matchupsData, isLoading: matchupsLoading } = useQuery({
+  const {
+    data: matchupsData,
+    isLoading: matchupsLoading,
+    isError: matchupsError,
+    refetch: refetchMatchups,
+  } = useQuery({
     queryKey: ["matchup-preview"],
     queryFn: async () => {
       const res = await fetch("/api/matchups");
       if (res.status === 401) return null;
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error("Failed to fetch matchups");
       const raw = await res.json();
       return normalizeMatchups(raw);
     },
     enabled: isAuthenticated,
   });
 
-  // Stable team→color mapping so both pie charts use the same color per team
+  const { data: standingsHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ["standings-history"],
+    queryFn: async () => {
+      const res = await fetch("/api/league/standings-history");
+      if (res.status === 401) return null;
+      if (!res.ok) return null;
+      return (await res.json()) as StandingsHistoryData;
+    },
+    enabled: isAuthenticated,
+  });
+
+  // Stable team→color mapping so pie charts and line chart use the same color per team
   const teamColorMap = useMemo(() => {
     const map: Record<string, string> = {};
-    if (!matchupsData?.matchups) return map;
     let idx = 0;
-    for (const m of matchupsData.matchups) {
-      for (const team of [m.team1, m.team2]) {
+    // Seed from matchups data first (original source)
+    if (matchupsData?.matchups) {
+      for (const m of matchupsData.matchups) {
+        for (const team of [m.team1, m.team2]) {
+          if (!map[team.name]) {
+            map[team.name] = PIE_COLORS[idx % PIE_COLORS.length];
+            idx++;
+          }
+        }
+      }
+    }
+    // Also seed from standings history (in case matchups hasn't loaded yet)
+    if (standingsHistory?.teams) {
+      for (const team of standingsHistory.teams) {
         if (!map[team.name]) {
           map[team.name] = PIE_COLORS[idx % PIE_COLORS.length];
           idx++;
@@ -1177,7 +1485,7 @@ export default function Home() {
       }
     }
     return map;
-  }, [matchupsData]);
+  }, [matchupsData, standingsHistory]);
 
   return (
     <>
@@ -1214,6 +1522,8 @@ export default function Home() {
           standings={standings ?? undefined}
           isLoading={isAuthenticated && standingsLoading}
           isUnauth={isUnauth}
+          isError={standingsError}
+          onRetry={() => refetchStandings()}
         />
         <PlayerLeaderCard
           title="Goal Leader"
@@ -1223,6 +1533,8 @@ export default function Home() {
           players={allPlayers ?? undefined}
           isLoading={isAuthenticated && playersLoading}
           isUnauth={isUnauth}
+          isError={playersError}
+          onRetry={() => refetchPlayers()}
           count={3}
           delay={100}
         />
@@ -1236,6 +1548,8 @@ export default function Home() {
           players={allPlayers ?? undefined}
           isLoading={isAuthenticated && playersLoading}
           isUnauth={isUnauth}
+          isError={playersError}
+          onRetry={() => refetchPlayers()}
           count={3}
           delay={150}
         />
@@ -1243,6 +1557,8 @@ export default function Home() {
           matchupsData={matchupsData}
           isLoading={isAuthenticated && matchupsLoading}
           isUnauth={isUnauth}
+          isError={matchupsError}
+          onRetry={() => refetchMatchups()}
         />
 
         {/* Row 3: Top Goalie + Goals Pie + Assists Pie */}
@@ -1254,6 +1570,8 @@ export default function Home() {
           players={allPlayers ?? undefined}
           isLoading={isAuthenticated && playersLoading}
           isUnauth={isUnauth}
+          isError={playersError}
+          onRetry={() => refetchPlayers()}
           count={3}
           delay={250}
         />
@@ -1264,6 +1582,8 @@ export default function Home() {
           matchupsData={matchupsData}
           isLoading={isAuthenticated && matchupsLoading}
           isUnauth={isUnauth}
+          isError={matchupsError}
+          onRetry={() => refetchMatchups()}
           teamColorMap={teamColorMap}
           delay={300}
         />
@@ -1274,8 +1594,18 @@ export default function Home() {
           matchupsData={matchupsData}
           isLoading={isAuthenticated && matchupsLoading}
           isUnauth={isUnauth}
+          isError={matchupsError}
+          onRetry={() => refetchMatchups()}
           teamColorMap={teamColorMap}
           delay={350}
+        />
+
+        {/* Row 4: Standings Over Time (full width) */}
+        <StandingsOverTimeCard
+          historyData={standingsHistory}
+          isLoading={isAuthenticated && historyLoading}
+          isUnauth={isUnauth}
+          teamColorMap={teamColorMap}
         />
       </div>
     </>
