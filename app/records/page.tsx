@@ -30,7 +30,7 @@ interface RecordsData {
 const SKATER_CARD_CONFIG = [
   { statId: "1", accent: "text-accent-primary" },
   { statId: "2", accent: "text-accent-info" },
-  { statId: "12", accent: "text-accent-warning" },
+  { statId: "8", accent: "text-accent-warning" },
   { statId: "11", accent: "text-emerald-400" },
   { statId: "14", accent: "text-sky-400" },
   { statId: "31", accent: "text-accent-danger" },

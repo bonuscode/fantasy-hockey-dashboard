@@ -39,7 +39,7 @@ interface NormalizedScoreboard {
 // --- Stat ID → label map (combined skater + goalie, BrewZoo league) ---
 
 const STAT_LABEL_MAP: Record<string, string> = {
-  "1": "G", "2": "A", "12": "PPP", "11": "SHG",
+  "1": "G", "2": "A", "8": "PPP", "12": "PPP", "11": "SHG",
   "14": "SOG", "31": "HIT", "32": "BLK",
   "19": "W", "22": "GA", "23": "GAA",
   "24": "SA", "25": "SV", "26": "SV%", "27": "SO",
