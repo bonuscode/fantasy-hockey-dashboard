@@ -9,6 +9,7 @@ const navLinks = [
   { href: "/standings", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/matchups", label: "Matchups" },
+  { href: "/records", label: "Records" },
 ];
 
 export default function Navigation() {
