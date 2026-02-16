@@ -27,7 +27,7 @@ interface RecordsResponse {
 const RECORD_STATS: { statId: string; label: string; lowerIsBetter: boolean }[] = [
   { statId: "1", label: "Most Goals", lowerIsBetter: false },
   { statId: "2", label: "Most Assists", lowerIsBetter: false },
-  { statId: "12", label: "Most Power Play Points", lowerIsBetter: false },
+  { statId: "8", label: "Most Power Play Points", lowerIsBetter: false },
   { statId: "11", label: "Most SH Goals", lowerIsBetter: false },
   { statId: "14", label: "Most Shots on Goal", lowerIsBetter: false },
   { statId: "31", label: "Most Hits", lowerIsBetter: false },
