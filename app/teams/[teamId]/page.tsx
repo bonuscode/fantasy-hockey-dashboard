@@ -47,7 +47,7 @@ type PositionGroup = "Forwards" | "Defense" | "Goalies" | "Bench" | "IR";
 // --- Stat ID mapping (BrewZoo league-specific) ---
 
 const SKATER_STAT_MAP: Record<string, string> = {
-  "1": "G", "2": "A", "8": "PIM", "11": "SHG",
+  "1": "G", "2": "A", "12": "PPP", "11": "SHG",
   "14": "SOG", "31": "HIT", "32": "BLK",
 };
 
@@ -64,7 +64,7 @@ const GOALIE_LABEL_TO_ID: Record<string, string> = Object.fromEntries(
   Object.entries(GOALIE_STAT_MAP).map(([id, label]) => [label, id])
 );
 
-const SKATER_STAT_LABELS = ["G", "A", "SOG", "HIT", "BLK", "PIM", "SHG"];
+const SKATER_STAT_LABELS = ["G", "A", "SOG", "HIT", "BLK", "PPP", "SHG"];
 const GOALIE_STAT_LABELS = ["W", "GAA", "SV%", "SO", "GA", "SV", "SA"];
 
 // --- Normalization ---
@@ -196,7 +196,7 @@ function getDisplayStats(player: PlayerInfo): { label: string; value: string }[]
   const statMap = isGoalie ? GOALIE_STAT_MAP : SKATER_STAT_MAP;
   const priorityStats = isGoalie
     ? ["19", "23", "26", "27", "22", "25", "24"]
-    : ["1", "2", "14", "31", "32", "8", "11"];
+    : ["1", "2", "14", "31", "32", "12", "11"];
 
   const result: { label: string; value: string }[] = [];
   for (const statId of priorityStats) {
@@ -248,8 +248,8 @@ function getStatusBadge(status: string) {
   }
 }
 
-// Lower-is-better stats (GAA, GA, PIM) sort ascending by default
-const LOWER_IS_BETTER = new Set(["23", "22", "8"]);
+// Lower-is-better stats (GAA, GA) sort ascending by default
+const LOWER_IS_BETTER = new Set(["23", "22"]);
 
 function sortPlayersByStat(players: PlayerInfo[], statId: string, dir: "desc" | "asc"): PlayerInfo[] {
   return [...players].sort((a, b) => {

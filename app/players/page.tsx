@@ -39,7 +39,7 @@ interface TrendsData {
 // --- Stat ID mapping (BrewZoo league-specific) ---
 
 const SKATER_STAT_MAP: Record<string, string> = {
-  "1": "G", "2": "A", "8": "PIM", "11": "SHG",
+  "1": "G", "2": "A", "12": "PPP", "11": "SHG",
   "14": "SOG", "31": "HIT", "32": "BLK",
 };
 
@@ -55,11 +55,11 @@ const GOALIE_LABEL_TO_ID: Record<string, string> = Object.fromEntries(
   Object.entries(GOALIE_STAT_MAP).map(([id, label]) => [label, id])
 );
 
-const SKATER_STAT_LABELS = ["G", "A", "SOG", "HIT", "BLK", "PIM", "SHG"];
+const SKATER_STAT_LABELS = ["G", "A", "SOG", "HIT", "BLK", "PPP", "SHG"];
 const GOALIE_STAT_LABELS = ["W", "GAA", "SV%", "SO", "GA", "SV", "SA"];
 
-// Lower-is-better stats (GAA, GA, PIM) default ascending
-const LOWER_IS_BETTER = new Set(["23", "22", "8"]);
+// Lower-is-better stats (GAA, GA) default ascending
+const LOWER_IS_BETTER = new Set(["23", "22"]);
 
 const POSITION_FILTERS: PositionFilter[] = ["All Skaters", "C", "LW", "RW", "D", "G"];
 
