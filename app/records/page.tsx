@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 
 // ————— Types —————
 
@@ -10,7 +11,7 @@ interface RecordHolder {
   logoUrl: string | null;
   value: number;
   displayValue: string;
-  week: number;
+  weeks: number[];
 }
 
 interface StatRecord {
@@ -28,13 +29,13 @@ interface RecordsData {
 // ————— Card config —————
 
 const SKATER_CARD_CONFIG = [
-  { statId: "1", accent: "text-accent-primary" },
-  { statId: "2", accent: "text-accent-info" },
-  { statId: "8", accent: "text-accent-warning" },
-  { statId: "11", accent: "text-emerald-400" },
-  { statId: "14", accent: "text-sky-400" },
-  { statId: "31", accent: "text-accent-danger" },
-  { statId: "32", accent: "text-purple-400" },
+  { statId: "1", accent: "text-accent-primary", badge: "/badges/goal_badge.png" },
+  { statId: "2", accent: "text-accent-info", badge: "/badges/assist_badge.png" },
+  { statId: "8", accent: "text-accent-warning", badge: "/badges/ppp_badge.png" },
+  { statId: "11", accent: "text-emerald-400", badge: "/badges/shp_badge.png" },
+  { statId: "14", accent: "text-sky-400", badge: "/badges/sog_badge.png" },
+  { statId: "31", accent: "text-accent-danger", badge: "/badges/hit_badge.png" },
+  { statId: "32", accent: "text-purple-400", badge: "/badges/blk_badge.png" },
 ];
 
 const GOALIE_CARD_CONFIG = [
@@ -93,11 +94,13 @@ function RecordCard({
   accent,
   delay = 0,
   isLoading,
+  badge,
 }: {
   record: StatRecord | undefined;
   accent: string;
   delay?: number;
   isLoading: boolean;
+  badge?: string;
 }) {
   // Loading state
   if (isLoading || !record) {
@@ -151,17 +154,37 @@ function RecordCard({
     <CardShell delay={delay}>
       <CardHeader title={record.label} />
       <div className="px-5 pb-5">
-        {/* Record value */}
-        <div className="text-center mb-3">
-          <div
-            className={`text-4xl font-mono font-bold ${accent} leading-none`}
-          >
-            {primary.displayValue}
+        {/* Badge + record value */}
+        {badge ? (
+          <div className="flex items-center gap-4 mb-3">
+            <img
+              src={badge}
+              alt=""
+              className="w-14 h-14 shrink-0"
+            />
+            <div>
+              <div
+                className={`text-4xl font-mono font-bold ${accent} leading-none`}
+              >
+                {primary.displayValue}
+              </div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wide mt-1">
+                in a single week
+              </div>
+            </div>
           </div>
-          <div className="text-[10px] text-text-muted uppercase tracking-wide mt-1">
-            in a single week
+        ) : (
+          <div className="text-center mb-3">
+            <div
+              className={`text-4xl font-mono font-bold ${accent} leading-none`}
+            >
+              {primary.displayValue}
+            </div>
+            <div className="text-[10px] text-text-muted uppercase tracking-wide mt-1">
+              in a single week
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Tied badge */}
         {isTied && (
@@ -176,7 +199,7 @@ function RecordCard({
         <div className="space-y-2">
           {record.holders.map((h) => (
             <div
-              key={`${h.teamKey}-${h.week}`}
+              key={h.teamKey}
               className="flex items-center gap-2.5"
             >
               {h.logoUrl ? (
@@ -193,10 +216,15 @@ function RecordCard({
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-text-primary truncate">
+                <Link
+                  href={`/teams/${h.teamKey.split(".t.")[1]}`}
+                  className="text-sm font-medium text-text-primary truncate hover:text-accent-primary transition-colors"
+                >
                   {h.teamName}
+                </Link>
+                <div className="text-xs text-text-muted">
+                  Week {(h.weeks ?? []).join(" & ")}
                 </div>
-                <div className="text-xs text-text-muted">Week {h.week}</div>
               </div>
             </div>
           ))}
@@ -407,6 +435,7 @@ export default function RecordsPage() {
             key={cfg.statId}
             record={getRecord(cfg.statId)}
             accent={cfg.accent}
+            badge={"badge" in cfg ? cfg.badge : undefined}
             delay={i * 50}
             isLoading={false}
           />

@@ -9,7 +9,7 @@ interface RecordHolder {
   logoUrl: string | null;
   value: number;
   displayValue: string;
-  week: number;
+  weeks: number[];
 }
 
 interface StatRecord {
@@ -45,8 +45,17 @@ function extractCurrentWeek(raw: any): number {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractTeamStatsFromWeek(raw: any, weekNum: number): Map<string, RecordHolder[]> {
-  const result = new Map<string, RecordHolder[]>();
+interface RawEntry {
+  teamName: string;
+  teamKey: string;
+  logoUrl: string | null;
+  value: number;
+  displayValue: string;
+  week: number;
+}
+
+function extractTeamStatsFromWeek(raw: any, weekNum: number): Map<string, RawEntry[]> {
+  const result = new Map<string, RawEntry[]>();
   const scoreboard = raw?.scoreboard || raw?.league?.scoreboard || raw;
 
   let rawMatchups: unknown[] = [];
@@ -105,7 +114,7 @@ function extractTeamStatsFromWeek(raw: any, weekNum: number): Map<string, Record
 }
 
 export async function GET() {
-  const cacheKey = "league-records";
+  const cacheKey = "league-records-v2";
 
   const cached = getCache<RecordsResponse>(cacheKey);
   if (cached) {
@@ -150,7 +159,7 @@ export async function GET() {
     );
 
     // Collect all team stats across all weeks
-    const allStats = new Map<string, RecordHolder[]>();
+    const allStats = new Map<string, RawEntry[]>();
 
     for (const { week, data } of weekScoreboards) {
       if (!data) continue;
@@ -177,7 +186,27 @@ export async function GET() {
         bestValue = Math.max(...entries.map((e) => e.value));
       }
 
-      const holders = entries.filter((e) => e.value === bestValue);
+      // Deduplicate by teamKey — a team that hit the record value in multiple
+      // weeks counts as one holder, not one per week.
+      const byTeam = new Map<string, RecordHolder>();
+      for (const e of entries) {
+        if (e.value !== bestValue) continue;
+        const existing = byTeam.get(e.teamKey);
+        if (existing) {
+          existing.weeks.push(e.week);
+          existing.weeks.sort((a, b) => a - b);
+        } else {
+          byTeam.set(e.teamKey, {
+            teamName: e.teamName,
+            teamKey: e.teamKey,
+            logoUrl: e.logoUrl,
+            value: e.value,
+            displayValue: e.displayValue,
+            weeks: [e.week],
+          });
+        }
+      }
+      const holders = Array.from(byTeam.values());
 
       return { ...rs, holders };
     });

@@ -44,6 +44,18 @@ interface PlayerStat {
 
 type PositionGroup = "Forwards" | "Defense" | "Goalies" | "Bench" | "IR";
 
+// --- Badge config (record-holder badges, keyed by stat ID) ---
+
+const BADGE_CONFIG: { statId: string; badge: string; label: string }[] = [
+  { statId: "1",  badge: "/badges/goal_badge.png",   label: "Goal Record" },
+  { statId: "2",  badge: "/badges/assist_badge.png", label: "Assist Record" },
+  { statId: "8",  badge: "/badges/ppp_badge.png",    label: "PPP Record" },
+  { statId: "11", badge: "/badges/shp_badge.png",    label: "SHG Record" },
+  { statId: "14", badge: "/badges/sog_badge.png",    label: "SOG Record" },
+  { statId: "31", badge: "/badges/hit_badge.png",    label: "Hit Record" },
+  { statId: "32", badge: "/badges/blk_badge.png",    label: "Block Record" },
+];
+
 // --- Stat ID mapping (BrewZoo league-specific) ---
 
 const SKATER_STAT_MAP: Record<string, string> = {
@@ -658,6 +670,18 @@ export default function TeamPage() {
     },
   });
 
+  // Fetch records to determine which badges this team holds
+  const { data: recordsData } = useQuery({
+    queryKey: ["records"],
+    queryFn: async () => {
+      const res = await fetch("/api/records");
+      if (!res.ok) return null;
+      return res.json() as Promise<{
+        records: { statId: string; holders: { teamKey: string }[] }[];
+      }>;
+    },
+  });
+
   const isLoading = teamLoading || rosterLoading;
   const isUnauth =
     teamError && teamErrorObj instanceof Error && teamErrorObj.message === "NOT_AUTHENTICATED";
@@ -683,6 +707,18 @@ export default function TeamPage() {
   const activeSortStatId = sortStat
     ? SKATER_LABEL_TO_ID[sortStat] || GOALIE_LABEL_TO_ID[sortStat] || null
     : null;
+
+  // Badges this team currently holds (all-time single-week record holder)
+  const teamBadges =
+    teamInfo && recordsData
+      ? BADGE_CONFIG.filter((cfg) =>
+          recordsData.records.some(
+            (r) =>
+              r.statId === cfg.statId &&
+              r.holders.some((h) => h.teamKey === teamInfo.teamKey)
+          )
+        )
+      : [];
 
   // Back nav helper
   const backNav = (
@@ -801,6 +837,21 @@ export default function TeamPage() {
                 )}
               </div>
             </div>
+
+            {/* Record badges — right-aligned */}
+            {teamBadges.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-2 shrink-0 self-start max-w-[160px] md:max-w-[240px]">
+                {teamBadges.map((cfg) => (
+                  <img
+                    key={cfg.statId}
+                    src={cfg.badge}
+                    alt={cfg.label}
+                    title={cfg.label}
+                    className="w-16 h-16 md:w-20 md:h-20"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
